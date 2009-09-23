@@ -28,13 +28,13 @@ class Deck(object):
         
     @cards.setter
     def cards(self, value):
-        for c in v:
+        for c in value:
             c.owner = self
         self._cards = set(value)
         
         self.short_title_map = {}
         for card in value:
-            self.short_title_map[card.short_title] = value
+            self.short_title_map[card.short_title] = card
     
     def find_card(self, short_title):
         return self.short_title_map[short_title]

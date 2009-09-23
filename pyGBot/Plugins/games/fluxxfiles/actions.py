@@ -433,7 +433,7 @@ class DrawXUseY(ActionCard):
     def ask(self):
         player = self.player
         cards_str = ["%d: %s" % (i+1, c) for i, c in enumerate(self.cards)]
-        player.output("What do you want to play? %s" % \
+        player.request_input("What do you want to play? %s" % \
                       pretty_print_list(cards_str), (self, card_regex))
 
 class DrawTwoUseThem(DrawXUseY):

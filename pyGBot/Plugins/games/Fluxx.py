@@ -44,6 +44,7 @@ class FluxxIRCUser(FluxxPlayer):
     _halt_game = None
     
     def __init__(self, name, plugin):
+        FluxxPlayer.__init__(self, name)
         self.name = name
         self.plugin = plugin
         self.game = plugin.game
@@ -77,7 +78,15 @@ class FluxxIRCUser(FluxxPlayer):
     
         log.logger.info("Starting %s's turn" % self.name)
         self.output("It is now your turn.")
-        self.game.pubout("It is now %s's turn." % self.name)
+        self.plugin.pubout("It is now %s's turn." % self.name)
+
+        hand_str = ["%d: %s" % (i+1, c) for i, c in enumerate(self.hand)]
+        hand_str = pretty_print_list(hand_str)
+        if hand_str == "":
+            hand_str = " no cards."
+        else:
+            hand_str = ": " + hand_str
+        self.output('Your hand contains%s' % hand_str)
         
         rules = self.game.rule_pile
         if rules.no_hand_bonus(self) > 0:
@@ -93,11 +102,11 @@ class FluxxIRCUser(FluxxPlayer):
                 player = self.game.players[-1]
             else:
                 player = self.game.players[t]
-            self.bot.pubout(("%s must choose the first card from " +
+            self.plugin.pubout(("%s must choose the first card from " +
                                  "%s's hand") % (player.name, self.name))
             self.halt_game = "First Play Random"
             ask()
-        
+            
         d, p = rules.draw_amount, rules.play_amount
         self.draw_amount = self.play_amount = 0
         self.output("You can draw %d card%s, and play %s card%s." % \
@@ -106,10 +115,10 @@ class FluxxIRCUser(FluxxPlayer):
     
     def request_input(self, question, callback):
         self.output(question)
-        self.bot.user_handlers[self.name.lower()] = callback
+        self.plugin.user_handlers[self.name.lower()] = callback
 
     def output(self, message):
-        self.bot.msg(self.name, message)
+        self.plugin.privout(self.name, message)
 
     @property
     def halt_game(self):
@@ -124,23 +133,22 @@ class FluxxIRCUser(FluxxPlayer):
 class Fluxx(BasePlugin):
     def __init__(self, bot, options):
         BasePlugin.__init__(self, bot, options)
-        self.users = []
-        self.user_handlers = []
+        self.users = {}
+        self.user_handlers = {}
 
-    def pubout(self, msg, *args, **kwargs):
+    def pubout(self, msg):
         self.privout(self.channel, msg)
 
-    def privout(self, user, message, *args, **kwargs):
+    def privout(self, user, message):
         for msg in message.strip().splitlines():
             if "%S" in msg:
-                if msg == '': msg = '  '
+                if msg.replace("%S", "").strip() == '': msg = '  '
             else:
                 msg = msg.strip()
-            self.bot.privout(user, msg \
+            self.bot.privout(user, msg
                             .replace('%B', BOLD)
                             .replace('%U', UNDERLINE)
-                            .replace('%V', REV_VIDEO),
-                            *args, **kwargs)
+                            .replace('%V', REV_VIDEO))
 
     def noteout(self, user, msg):
         self.bot.noteout(user, msg)
@@ -206,26 +214,28 @@ class Fluxx(BasePlugin):
         self.processmessage(channel, user, message)
     
     def msg_private(self, user, message):
-        self.processmessage(user, user, message, addressed=True)
+        self.processmessage(self.bot.nickname, user, message, addressed=True)
 
     def channel_names(self, channel, nameslist):
         pass
 
     def processmessage(self, channel, user, message, addressed=False):
         log.logger.info("Received message from %s in %s: %s" % (user, channel, message))
+
+        messageR = message
         
         if message.startswith(self.bot.nickname):
-            message = message[len(self.bot.nickname):].strip()
+            messageR = message[len(self.bot.nickname):].strip()
             if len(message) and message[0] in ":,":
-                message = message[1:].strip()
+                messageR = messageR[1:].strip()
                 addressed = True
                 
         if message[0] == '!':
-            message = message[1:].strip()
+            messageR = message[1:].strip()
             addressed = True
             
         if addressed:
-            L = message.split()
+            L = messageR.split()
             command = L[0]
             if len(L) > 1:
                 args = L[1:]
@@ -234,14 +244,16 @@ class Fluxx(BasePlugin):
             
             if command in command_aliases:
                 command = command_aliases[command]
-            if command not in command_handlers:
-                if not self.check_callback(user, message, True):
+            if not self.check_callback(channel, user, message, True):
+                if command not in command_handlers:
                     if channel == self.bot.nickname:
                         channel = user
                     return self.privout(channel, "Sorry %s, I don't know command '!%s'" % \
                                             (user, command))
+                else:
+                    command_handlers[command](self, channel, user, args)
             else:
-                command_handlers[command](self, channel, user, args)
+                self.check_callback(channel, user, message)
 
     def check_callback(self, channel, user, message, check=False):
         if user in self.user_handlers:
@@ -252,16 +264,16 @@ class Fluxx(BasePlugin):
                 regex = None
             if regex is None or re.match(regex, message, re.I):
                 if check: return True
-                if channel == self.nickname:
+                if channel == self.bot.nickname:
                     if handler(message):
                         del self.user_handlers[user]
                 else:
-                    self.say(channel, ("Sorry %s, you must respond in a "
-                                       "private message.") % user)
+                    self.privout(channel, ("Sorry %s, you must respond in a "
+                                           "private message.") % user)
 
         if check: return False
 
-    def help(self, user, channel, params):
+    def help(self, channel, user, params):
         helpText = {
             'commands': """
             My commands are: start, cardinfo, draw, play, currentgoal,
@@ -361,9 +373,9 @@ class Fluxx(BasePlugin):
             command = command_aliases[command]
         if command not in helpText:
             command = 'commands'
-        if channel == self.nickname:
+        if channel == self.bot.nickname:
             channel = user
-        self.msg(channel, helpText[command])
+        self.privout(channel, helpText[command])
 
     def _invalidCommandPrefix(noPrivate=False, needGameStarted=False,
                               needGameNotStarted=False, needUserInGame=False,
@@ -373,10 +385,10 @@ class Fluxx(BasePlugin):
                 if channel == self.bot.nickname:
                     channel = user
                 if noPrivate and channel == user:
-                    return self.msg(channel, "You can not use this command " +
+                    return self.privout(channel, "You can not use this command " +
                                              "in a private message.")
                 
-                hasGameStarted = self.game is not None
+                hasGameStarted = self.game.started
                 
                 if needGameStarted and not hasGameStarted:
                     return self.privout(channel, "You can not use this command in a " +
@@ -405,19 +417,24 @@ class Fluxx(BasePlugin):
             Please say or message !help startgame for more information.
             """)
         
-        def start_game_(debug):
+        def startGame_(debug):
+            def startGame__(message):
+                self.game.start_game()
             self.game = FluxxGame()
-            self.pubout("New game has started in %s." % self.name)
+            self.game.debug = debug
+            self.pubout("A new Fluxx game has started.")
             self.pubout("Any players who wish to play Fluxx please say !join.")
-            self.join(user)
+            self.join(self.channel, user)
+            self.privout(user, "When you are ready to start the game, say 'start'")
+            self.user_handlers[user] = (startGame__, '!?start(game)?')
         
-        if msg_channel == self.nickname:
+        if msg_channel == self.bot.nickname:
             msg_channel = user
 
         if len(params) == 0:
-            start_game_(False)
-        if len(params) == 1 and params[0] == "d3bugh4x0r":
-            start_game_(True)
+            startGame_(False)
+        elif len(params) == 1 and params[0] == "d3bugh4x0r":
+            startGame_(True)
         else:
             return printHelp()
 
@@ -428,7 +445,7 @@ class Fluxx(BasePlugin):
             Please say or message !help cardinfo for more information.
             """)
             
-        if channel == self.nickname:
+        if channel == self.bot.nickname:
             channel = user
         
         if len(params) != 1:
@@ -447,7 +464,7 @@ class Fluxx(BasePlugin):
             Please say or message !help search for more information.
             """)
 
-        if channel == self.nickname:
+        if channel == self.bot.nickname:
             channel = user
 
         search = ' '.join(params).lower()
@@ -489,7 +506,7 @@ class Fluxx(BasePlugin):
             callback()
         
     @_invalidCommandPrefix(needUserInGame=True, needCurrentTurn=True)
-    def draw(self, user, channel, params):
+    def draw(self, channel, user, params):
         def printHelp():
             self.privout(channel, """
             Syntax:    %B!draw [%Unumcards%U]%B
@@ -559,7 +576,7 @@ class Fluxx(BasePlugin):
         else: # Short name
             card = hand.find_card(card)
 
-        player.game.channel.output("%s played %s." % (user, card))
+        self.pubout("%s played %s." % (user, card))
         card.play(player)
         player.play_amount += 1
         if player.plays_left > 0:
@@ -568,7 +585,7 @@ class Fluxx(BasePlugin):
         self.turn_postfix(player)
     
     @_invalidCommandPrefix(noPrivate=True, needGameNotStarted=True)
-    def join(self, user, channel, params=[]):
+    def join(self, channel, user, params=[]):
 
         # Right now a player can only be in one game
         # to simplify implementation and command sets.
@@ -578,17 +595,18 @@ class Fluxx(BasePlugin):
         else:
             userobj = FluxxIRCUser(user, self)
             self.users[user.lower()] = userobj
-        userobj.bot = self
         self.privout(channel, "%s was added to the queue." % user)
         self.game.add_player(userobj)
         
     @_invalidCommandPrefix(needGameStarted=True, needUserInGame=True)
     def current_goal(self, channel, user, params):
         goal = self.users[user.lower()].game.current_goal
+        if channel == self.bot.nickname:
+            channel = user
         if goal is None:
-            self.say(channel, "There is no goal yet.")
+            self.privout(channel, "There is no goal yet.")
         else:
-            self.say(channel, "The current goal is %s" % goal)
+            self.privout(channel, "The current goal is %s" % goal)
         
     @_invalidCommandPrefix(needGameStarted=True, needUserInGame=True)
     def list_rules(self, channel, user, params):
@@ -666,7 +684,7 @@ command_handlers = {
     'listrules':      Fluxx.list_rules,
     'listhand':       Fluxx.list_hand,
     'listkeepers':    Fluxx.list_keepers,
-    'join':           Fluxx.queue,
+    'join':           Fluxx.join,
     'help':           Fluxx.help,
     'search':         Fluxx.search,
     'debug':          Fluxx.debug,
@@ -689,7 +707,7 @@ command_aliases = {
     'keepers':  'listkeepers',
     'lk':       'listkeepers',
     'k':        'listkeepers',
-    'q':        'queue',
+    'j':        'join',
     '?':        'help',
     'find':     'search',
 }

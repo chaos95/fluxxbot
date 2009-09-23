@@ -91,8 +91,10 @@ class ExclusionKeeperGoalCard(KeeperComboGoalCard):
                 return
         for player in game.players:
             win = True
-            for k in self.find_keeper(self._k[:-1]):
-                if "K_"+k not in player.keepers: win = False
+            for k in self._k[:-1]:
+                if "K_"+k not in player.keepers:
+                    win = False
+                    break
             if win: player.win()
 
 class FiveKeepers(GoalCard):

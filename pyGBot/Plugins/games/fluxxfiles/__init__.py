@@ -11,6 +11,7 @@ class FluxxGame(object):
     is_removable = False
     
     def __init__(self):
+        self.started = False
         self.finished = False
         self.deck = FluxxDeck()
         self.rule_pile = RulePile(self)
@@ -41,6 +42,7 @@ class FluxxGame(object):
     
     def start_game(self):
         # Deal to our players.
+        self.started = True
         self.deal()
         self.player.start_turn()
 
@@ -245,7 +247,7 @@ class FluxxPlayer(Player):
         def callback():
             self.game.next_turn()
         
-        self.enforce_limits(finish_turn_callback)
+        self.enforce_limits(callback)
     
     def draw(self, num_cards=0, action=False):
         if not action:
@@ -372,6 +374,7 @@ class FluxxHand(CardPile):
     
     def receive_card(self, card):
         if card.type == "Creeper":
+            print self.player
             self.player.keepers.receive(card)
             self.player.draw_amount += 1
             return self.game.draw_cards(1)[0]
