@@ -100,7 +100,7 @@ class FluxxGame(object):
     def post_deal_hook(self):
         pass
 
-discard_regex = "(!(discard|d) )?([0-9 ]+)|([%s]_[a-z0-9]+)"
+discard_regex = "(!(discard|d) )?([0-9 ]+)|([%s]_[a-z0-9_]+)"
 
 class FluxxPlayer(Player):
     
@@ -202,6 +202,7 @@ class FluxxPlayer(Player):
             self.game.discard(self.hand)
             
         if r.hand_limit > 0 and h > r.hand_limit:
+            self.plugin.pubout("%s's hand is over the limit and must discard manually." % self.name)
             self.output("Your hand is over the limit.")
             hand = ["(%d) %s" % (i+1, c) for i, c in enumerate(self.hand)]
             self.output("You have: " + pretty_print_list(hand))
@@ -223,6 +224,7 @@ class FluxxPlayer(Player):
         k = len(self.keepers.non_creepers)
         r = self.game.rule_pile
         if r.keeper_limit > 0 and k > r.keeper_limit:
+            self.plugin.pubout("%s's keeper pile is over the limit and must discard manually." % self.name)
             self.output("Your keeper pile is over the limit.")
             keepers = ["(%d) %s" % (i+1, c) for i, c in enumerate(self.keepers)]
             self.output("You have: " + pretty_print_list(keepers))
@@ -374,10 +376,13 @@ class FluxxHand(CardPile):
     
     def receive_card(self, card):
         if card.type == "Creeper":
-            print self.player
+            self.player.output("You got a Creeper! You got %s" % card)
+            self.player.output("Redrawing another card for you.")
             self.player.keepers.receive(card)
             self.player.draw_amount += 1
-            return self.game.draw_cards(1)[0]
+            card = self.game.draw_cards(1)[0]
+            print card
+            return card
         return True
 
 class FluxxDeck(Deck):
@@ -410,12 +415,11 @@ class FluxxDeck(Deck):
                     return t,
                 return t
             
-            return [KeeperCard(*m(t)) for t in ("Bread", "Coffee", "Chocolate",
-                                                "Cookies", "Dreams", "Love",
-                                                "Milk", "Money", "Peace", "Sleep",
-                                                ("Television", "TV"), "The Brain",
-                                                "The Cosmos", "The Eye", "The Moon",
-                                                "The Party", "The Rocket",
+            return [KeeperCard(*m(t)) for t in ("Bread", "Chocolate",  "Cookies",
+                                                "Dreams", "Love", "Milk", "Money",
+                                                "Peace", "Sleep", ("Television", "TV"),
+                                                "The Brain", "The Cosmos", "The Eye",
+                                                "The Moon", "The Party", "The Rocket",
                                                 "The Sun", "The Toaster", "Time")] + \
                    [CreeperCard("Radioactive Potato", "Any time the Goal changes, " +
                                 "move this card in the counter-turn direction."),
@@ -436,7 +440,7 @@ class FluxxDeck(Deck):
                     KeeperComboGoalCard("Milk and Cookies", "MI", "CO"),
                     KeeperComboGoalCard("Rocket to the Moon", "TR", "TM"),
                     KeeperComboGoalCard("Hearts and Minds", "LO", "TB"),
-                    KeeperComboGoalCard("The Appliances", "TT", "TE"),
+                    KeeperComboGoalCard("The Appliances", "TT", "TV"),
                     KeeperComboGoalCard("Hippyism", "PE", "LO"),
                     KeeperComboGoalCard("Night and Day", "TM", "TS"),
                     KeeperComboGoalCard("Baked Goods", "BR", "CO"),
@@ -452,11 +456,11 @@ class FluxxDeck(Deck):
                     KeeperComboGoalCard("Dough", "BR", "MO"),
                     KeeperComboGoalCard("All That Is Certain", "DE", "TA"),
                     # Custom ones
-                    KeeperComboGoalCard("A Good Investment", "TI", "MO", "TB"),
-                    KeeperComboGoalCard("Gluttony", "MI", "CH", "BR", "CO"),
+                    # KeeperComboGoalCard("A Good Investment", "TI", "MO", "TB"),
+                    # KeeperComboGoalCard("Gluttony", "MI", "CH", "BR", "CO"),
                     FiveKeepers(),
                     TenCardsInHand(),
-                    ExclusionKeeperGoalCard("The Brain (no TV)", "TB", "TE"),
+                    ExclusionKeeperGoalCard("The Brain (no TV)", "TB", "TV"),
                     ExclusionKeeperGoalCard("Peace (no War)", "PE", "WA"),
                     PartySnacks(),
                     AllYouNeedIsLove()]

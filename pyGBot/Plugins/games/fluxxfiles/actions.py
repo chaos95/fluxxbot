@@ -69,7 +69,7 @@ Select one of the New Rule cards in play and place it in the discard pile.
             if rule_picked not in self.rules:
                 player.output("You can't trash that rule.")
                 return self.ask()
-        player.game.channel.output("%s trashed %s." % (player.name, rule_picked))
+        player.plugin.pubout("%s trashed %s." % (player.name, rule_picked))
         player.game.draw_discard.discard(rule_picked)
         player.halt_game = None
         return True
@@ -224,10 +224,10 @@ you play this card.
                 return self.ask()
         player_name = keeper_picked.owner.player.name
         if player_name != player.name:
-            player.game.channel.output("%s trashed %s's %s." % \
+            player.plugin.pubout("%s trashed %s's %s." % \
                                        (player.name, player_name, keeper_picked))
         else:
-            player.game.channel.output("%s trashed their %s." % \
+            player.plugin.pubout("%s trashed their %s." % \
                                        (player.name, keeper_picked))
         player.game.draw_discard.discard(keeper_picked)
         player.halt_game = None
@@ -284,7 +284,7 @@ another player, and put it in front of you.
                 return self.ask()
         player_name = keeper_picked.owner.player.name
         if player_name != player.name:
-            player.game.channel.output("%s stole %s's %s." % \
+            player.plugin.pubout("%s stole %s's %s." % \
                                        (player.name, player_name, keeper_picked))
         else:
             player.output("You can't steal that keeper.")
@@ -329,8 +329,7 @@ class UseWhatYouTake(ActionCard):
     
     def __init__(self):
         ActionCard.__init__(self, "Use What You Take", "A_UT", """
-Start a new discard pile with this card and shuffle the rest
-of the discard pile back into the draw pile.
+Take a card at random from another player's hand, and play it.
         """)
     
     def do_action(self, player):
@@ -357,8 +356,8 @@ of the discard pile back into the draw pile.
             player_picked = players_dict[player_picked.lower()]
         card_picked = choice(player_picked.hand)
         player_name = player_picked.name
-        player.game.channel.output("%s used %s's %s." % \
-                                   (player.name, player_name, card_picked))
+        player.plugin.pubout("%s used %s's %s." % \
+                                 (player.name, player_name, card_picked))
         player.hand.receive(card_picked) # So the card belongs to the player now.
         card_picked.play(player)
         player.halt_game = None
@@ -438,8 +437,8 @@ class DrawXUseY(ActionCard):
 
 class DrawTwoUseThem(DrawXUseY):
 
-    draw_amount = 2
-    play_amount = 2
+    draw_total = 2
+    play_total = 2
     
     def __init__(self):
         ActionCard.__init__(self, "Draw 2 and Use 'em", "A_D2", """
@@ -453,8 +452,8 @@ This card, and all cards played because of it, are counted as a single play.
 
 class DrawThreePlayTwo(DrawXUseY):
 
-    draw_amount = 3
-    play_amount = 2
+    draw_total = 3
+    play_total = 2
     
     def __init__(self):
         ActionCard.__init__(self, "Draw 3, play 2 of them", "A_D3P2", """

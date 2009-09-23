@@ -53,6 +53,8 @@ class FluxxIRCUser(FluxxPlayer):
         log.logger.info("%s won Fluxx game %d" % (self.game, self.channel))
         self.plugin.pubout("%s won the game!" % self.name)
         self.plugin.game = None
+        self.plugin.users = {}
+        self.plugin.user_handlers = {}
         self.game = None
     
     def start_turn(self):
@@ -128,11 +130,12 @@ class FluxxIRCUser(FluxxPlayer):
     def halt_game(self, value):
         self._halt_game = value
         if value is None:
-            self.game.turn_postfix(self)
+            self.plugin.turn_postfix(self)
         
 class Fluxx(BasePlugin):
     def __init__(self, bot, options):
         BasePlugin.__init__(self, bot, options)
+        self.options = options
         self.users = {}
         self.user_handlers = {}
 
@@ -142,7 +145,8 @@ class Fluxx(BasePlugin):
     def privout(self, user, message):
         for msg in message.strip().splitlines():
             if "%S" in msg:
-                if msg.replace("%S", "").strip() == '': msg = '  '
+                msg = msg.replace("%S", "")
+                if msg == '': msg = '   '
             else:
                 msg = msg.strip()
             self.bot.privout(user, msg
@@ -154,9 +158,7 @@ class Fluxx(BasePlugin):
         self.bot.noteout(user, msg)
 
     def activate(self, channel=None):
-        if channel is None:
-            return False
-        self.channel = channel
+        self.channel = channel or '#'+self.options['channel']
 
     # Event handlers for other users
     def user_join(self, channel, username):
@@ -256,6 +258,7 @@ class Fluxx(BasePlugin):
                 self.check_callback(channel, user, message)
 
     def check_callback(self, channel, user, message, check=False):
+        user = user.lower()
         if user in self.user_handlers:
             handler = self.user_handlers[user]
             if not callable(handler) and len(handler) == 2:
@@ -268,8 +271,8 @@ class Fluxx(BasePlugin):
                     if handler(message):
                         del self.user_handlers[user]
                 else:
-                    self.privout(channel, ("Sorry %s, you must respond in a "
-                                           "private message.") % user)
+                    self.pubout(("Sorry %s, you must respond in a "
+                                 "private message.") % user)
 
         if check: return False
 
@@ -379,16 +382,22 @@ class Fluxx(BasePlugin):
 
     def _invalidCommandPrefix(noPrivate=False, needGameStarted=False,
                               needGameNotStarted=False, needUserInGame=False,
-                              needCurrentTurn=False):
+                              needCurrentTurn=False, needNoGame=False):
         def internal(func):
             def internal2(self, channel, user, params=[]):
                 if channel == self.bot.nickname:
                     channel = user
+                else:
+                    self.channel = channel
                 if noPrivate and channel == user:
                     return self.privout(channel, "You can not use this command " +
                                              "in a private message.")
-                
-                hasGameStarted = self.game.started
+
+                if needNoGame and getattr(self, "game", None) is not None:
+                    return self.privout(channel, "You can not use this command " +
+                                             "with a game starting.")
+               
+                hasGameStarted = getattr(self, "game", None) and self.game.started
                 
                 if needGameStarted and not hasGameStarted:
                     return self.privout(channel, "You can not use this command in a " +
@@ -398,8 +407,7 @@ class Fluxx(BasePlugin):
                     return self.privout(channel, "You can not use this command in a " +
                                              "channel with a game in progress.")
                 
-                if needUserInGame and (user.lower() not in self.users or \
-                                       self.users[user.lower()].game is None):
+                if needUserInGame and (user.lower() not in self.users or self.game is None):
                     return self.privout(channel, "You are not in a game.")
                 
                 if needCurrentTurn and not self.users[user.lower()].is_turn:
@@ -409,7 +417,7 @@ class Fluxx(BasePlugin):
             return internal2
         return internal
 
-    
+    @_invalidCommandPrefix(noPrivate=True, needNoGame=True)
     def start_game(self, msg_channel, user, params):
         def printHelp():
             self.privout(msg_channel, """
@@ -428,9 +436,6 @@ class Fluxx(BasePlugin):
             self.privout(user, "When you are ready to start the game, say 'start'")
             self.user_handlers[user] = (startGame__, '!?start(game)?')
         
-        if msg_channel == self.bot.nickname:
-            msg_channel = user
-
         if len(params) == 0:
             startGame_(False)
         elif len(params) == 1 and params[0] == "d3bugh4x0r":
@@ -587,22 +592,18 @@ class Fluxx(BasePlugin):
     @_invalidCommandPrefix(noPrivate=True, needGameNotStarted=True)
     def join(self, channel, user, params=[]):
 
-        # Right now a player can only be in one game
-        # to simplify implementation and command sets.
-        
         if user.lower() in self.users:
-            userobj = self.users[user.lower()]
-        else:
-            userobj = FluxxIRCUser(user, self)
-            self.users[user.lower()] = userobj
+            return self.privout(channel, "%s was already in the queue!" % user)
+        
+        userobj = FluxxIRCUser(user, self)
+        self.users[user.lower()] = userobj
+        
         self.privout(channel, "%s was added to the queue." % user)
         self.game.add_player(userobj)
         
     @_invalidCommandPrefix(needGameStarted=True, needUserInGame=True)
     def current_goal(self, channel, user, params):
         goal = self.users[user.lower()].game.current_goal
-        if channel == self.bot.nickname:
-            channel = user
         if goal is None:
             self.privout(channel, "There is no goal yet.")
         else:

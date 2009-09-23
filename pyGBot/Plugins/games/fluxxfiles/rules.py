@@ -184,27 +184,28 @@ continue playing until a clear winner emerges.)
             self.goal1.check_for_win(game)
         if self.goal2 is not None:
             self.goal2.check_for_win(game)
-
-    def __call__(self, choice):
-        player = self.player
-        choice = choice.strip()
-        if choice == "1" or self.goal1.short_title == choice.upper():
-            player.game.channel.output("%s replaced %s with %s." % (player.name, self.goal1, self.new_goal))
-            self.goal1 = self.new_goal
-            player.halt_game = None
-            return True
-        elif choice == "2" or self.goal2.short_title == choice.upper():
-            player.game.channel.output("%s replaced %s with %s." % (player.name, self.goal2, self.new_goal))
-            self.goal2 = self.new_goal
-            player.halt_game = None
-            return True
-        else:
-            player.request_input("Which goal do you want to remove? (1 or 2)",
-                                 (replace_goal_callback, regex))
-    
     
     def replace_goal(self, new_goal, player):
         regex = "1|2|[gG]_[a-zA-Z]+"
+
+        def callback(message):
+            player = self.player
+            choice = message.strip()
+            if choice == "1" or self.goal1.short_title == choice.upper():
+                player.plugin.pubout("%s replaced %s with %s." % \
+                                         (player.name, self.goal1, self.new_goal))
+                self.goal1 = self.new_goal
+                player.halt_game = None
+                return True
+            elif choice == "2" or self.goal2.short_title == choice.upper():
+                player.plugin.pubout("%s replaced %s with %s." % \
+                                         (player.name, self.goal2, self.new_goal))
+                self.goal2 = self.new_goal
+                player.halt_game = None
+                return True
+            else:
+                player.request_input("Which goal do you want to remove? (1 or 2)",
+                                     (callback, regex))
         
         if self.goal1 is None:
             self.goal1 = new_goal
@@ -216,7 +217,7 @@ continue playing until a clear winner emerges.)
             self.player = player
             return player.request_input(("The goals are 1: '%s' and 2: '%s'. " +
                                  "Which goal do you want to remove?") %
-                                 (self.goal1, self.goal2), (self, regex))
+                                 (self.goal1, self.goal2), (callback, regex))
             
     def play(self, player):
         self.owner.cards.remove(self)

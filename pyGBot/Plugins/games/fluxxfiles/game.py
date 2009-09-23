@@ -79,23 +79,27 @@ class CardPile(object):
     def shuffle(self):
         random.shuffle(self.cards)
 
-    def receive(self, cards):
-        L = []
-        print cards
-        for card in cards:
+    def receive(self, R):
+        for card in R:
             if card.owner and card.owner.is_removable and card in card.owner.cards:
+                print "Removing '%s' from %r, due to placement in %r" % (card, card.owner, self)
                 card.owner.cards.remove(card)
-                
+                if hasattr(card.owner, "short_title_map") and \
+                        card.short_title in card.owner.short_title_map:
+                    del card.owner.short_title_map[card.short_title]
+
+        L = []
+        for card in R:
             ret = self.receive_card(card)
             if ret is True:
                 self.cards.append(card)
                 self.short_title_map[card.short_title] = card
-                L.append(card)
                 card.owner = self
+                L.append(card)
             elif ret is not False:
                 self.cards.append(ret)
-                L.append(ret)
                 ret.owner = self
+                L.append(ret)
         return L
 
     def receive_card(self, card):
@@ -115,6 +119,11 @@ class CardPile(object):
         """
         Return num_cards cards from the top of the pile.
         """
+        # L = self.cards[:num_cards]
+        # for card in L:
+        #     self.cards.remove(card)
+        #     del self.short_title_map[card.short_title]
+        # return L
         return self.cards[:num_cards]
     
     def __contains__(self, card):
