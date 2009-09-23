@@ -56,7 +56,15 @@ class Card(object):
         self.title = title
         # short_title must be unique!
         self.short_title = short_title
-        self.owner = None
+        self._owner = None
+
+    def del_owner(self):
+        if self.owner and self.owner.is_removable and self in self.owner.cards:
+            print "Removing '%s' from %r" % (self, self.owner)
+            self.owner.cards.remove(self)
+            if hasattr(self.owner, "short_title_map") and \
+                    self.short_title in self.owner.short_title_map:
+                del self.owner.short_title_map[self.short_title]
         
     def __repr(self):
         return "Card(%r)" % self.title
@@ -81,13 +89,8 @@ class CardPile(object):
 
     def receive(self, R):
         for card in R:
-            if card.owner and card.owner.is_removable and card in card.owner.cards:
-                print "Removing '%s' from %r, due to placement in %r" % (card, card.owner, self)
-                card.owner.cards.remove(card)
-                if hasattr(card.owner, "short_title_map") and \
-                        card.short_title in card.owner.short_title_map:
-                    del card.owner.short_title_map[card.short_title]
-
+            card.del_owner()
+            
         L = []
         for card in R:
             ret = self.receive_card(card)
@@ -98,6 +101,8 @@ class CardPile(object):
                 L.append(card)
             elif ret is not False:
                 self.cards.append(ret)
+                self.short_title_map[ret.short_title] = ret
+                ret.del_owner()
                 ret.owner = self
                 L.append(ret)
         return L

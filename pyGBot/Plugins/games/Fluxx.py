@@ -52,9 +52,7 @@ class FluxxIRCUser(FluxxPlayer):
     def win(self):
         log.logger.info("%s won Fluxx game %d" % (self.game, self.channel))
         self.plugin.pubout("%s won the game!" % self.name)
-        self.plugin.game = None
-        self.plugin.users = {}
-        self.plugin.user_handlers = {}
+        self.plugin.end()
         self.game = None
     
     def start_turn(self):
@@ -257,6 +255,12 @@ class Fluxx(BasePlugin):
             else:
                 self.check_callback(channel, user, message)
 
+    def end(self):
+        self.game = None
+        self.users = {}
+        self.user_handlers = {}
+        self.pubout("The game has ended")
+    
     def check_callback(self, channel, user, message, check=False):
         user = user.lower()
         if user in self.user_handlers:
@@ -279,9 +283,9 @@ class Fluxx(BasePlugin):
     def help(self, channel, user, params):
         helpText = {
             'commands': """
-            My commands are: start, cardinfo, draw, play, currentgoal,
+            My commands are: cardinfo, draw, play, currentgoal,
                              listrules, listhand, listkeepers, queue,
-                             help, search
+                             help, search, startgame, endgame
             %S
             Say %B!help %UCOMMAND%U%B for help with each command.
             """,
@@ -289,10 +293,13 @@ class Fluxx(BasePlugin):
             'startgame': """
             Syntax:    %B!startgame
             Start a game in this channel.
-            
-            Syntax:    %B!startgame #%Uchannel%U %Ugamenumber%U%B
-            Finish game %Ugamenumber%U in #%Uchannel%U.
             Aliases:   !start, !s
+            """,
+
+            'endgame': """
+            Syntax:    %B!endgame
+            End the current game.
+            Aliases:   !end, !e
             """,
             
             'cardinfo': """
@@ -351,7 +358,7 @@ class Fluxx(BasePlugin):
             'join': """
             Syntax:    %B!join%B
             Join the game.
-            Aliases:   !q
+            Aliases:   !j
             """,
             
             'help': """
@@ -382,7 +389,7 @@ class Fluxx(BasePlugin):
 
     def _invalidCommandPrefix(noPrivate=False, needGameStarted=False,
                               needGameNotStarted=False, needUserInGame=False,
-                              needCurrentTurn=False, needNoGame=False):
+                              needCurrentTurn=False, needNoGame=False, needGame=False):
         def internal(func):
             def internal2(self, channel, user, params=[]):
                 if channel == self.bot.nickname:
@@ -396,7 +403,11 @@ class Fluxx(BasePlugin):
                 if needNoGame and getattr(self, "game", None) is not None:
                     return self.privout(channel, "You can not use this command " +
                                              "with a game starting.")
-               
+
+                if needGame and getattr(self, "game", None) is None:
+                    return self.privout(channel, "You can not use this command " +
+                                             "without a game starting or in progress.")
+                
                 hasGameStarted = getattr(self, "game", None) and self.game.started
                 
                 if needGameStarted and not hasGameStarted:
@@ -442,6 +453,16 @@ class Fluxx(BasePlugin):
             startGame_(True)
         else:
             return printHelp()
+
+    @_invalidCommandPrefix(noPrivate=True, needGame=True)
+    def end_game(self, msg_channel, user, params):
+        def printHelp():
+            self.privout(msg_channel, """
+            Syntax:    %B!endgame
+            Please say or message !help endgame for more information.
+            """)
+        
+        self.end()
 
     def card_info(self, channel, user, params):
         def printHelp():
@@ -601,7 +622,7 @@ class Fluxx(BasePlugin):
         self.privout(channel, "%s was added to the queue." % user)
         self.game.add_player(userobj)
         
-    @_invalidCommandPrefix(needGameStarted=True, needUserInGame=True)
+    @_invalidCommandPrefix(needGameStarted=True)
     def current_goal(self, channel, user, params):
         goal = self.users[user.lower()].game.current_goal
         if goal is None:
@@ -609,7 +630,7 @@ class Fluxx(BasePlugin):
         else:
             self.privout(channel, "The current goal is %s" % goal)
         
-    @_invalidCommandPrefix(needGameStarted=True, needUserInGame=True)
+    @_invalidCommandPrefix(needGameStarted=True)
     def list_rules(self, channel, user, params):
         rules = self.users[user.lower()].game.rule_pile
         hl = rules.hand_limit
@@ -635,7 +656,7 @@ not added because they vary per player.''' % (rules,
             hand_str = ": " + hand_str
         self.privout(user, 'Your hand contains%s' % hand_str)
         
-    @_invalidCommandPrefix(needGameStarted=True, needUserInGame=True)
+    @_invalidCommandPrefix(needGameStarted=True)
     def list_keepers(self, channel, user, params):
         def printHelp():
             self.privout(channel, """
@@ -677,6 +698,7 @@ not added because they vary per player.''' % (rules,
 
         
 command_handlers = {
+    'endgame':        Fluxx.end_game,
     'startgame':      Fluxx.start_game,
     'cardinfo':       Fluxx.card_info,
     'draw':           Fluxx.draw,
@@ -692,6 +714,8 @@ command_handlers = {
 }
             
 command_aliases = {
+    'e':        'endgame',
+    'end':      'endgame',
     's':        'startgame',
     'start':    'startgame',
     'i':        'cardinfo',
