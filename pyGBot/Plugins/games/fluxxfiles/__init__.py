@@ -91,6 +91,7 @@ class FluxxGame(object):
     
     def discard(self, cards):
         # Utility function for us.
+        print "Discarding %r" % cards
         self.draw_discard.discard(cards)
 
     @property
@@ -294,10 +295,13 @@ class KeeperPile(CardPile):
     def __len__(self):
         return len([c for c in self.cards])
 
+    def __repr__(self):
+        return "%s's Keeper Pile" % (self.player.name)
+
 class DrawDiscard(object):
     def __init__(self, game):
-        self.draw_pile = CardPile()
-        self.discard_pile = CardPile()
+        self.draw_pile = CardPile("Draw Pile")
+        self.discard_pile = CardPile("Discard Pile")
         self.game = self.draw_pile.game = self.discard_pile.game = game
 
     def discard(self, cards):
@@ -314,7 +318,7 @@ class DrawDiscard(object):
 
 class RulePile(CardPile):
     def __init__(self, game):
-        CardPile.__init__(self)
+        CardPile.__init__(self, "Rule Pile")
         self.game = game
         
     def receive_card(self, card):
@@ -384,6 +388,9 @@ class FluxxHand(CardPile):
             print card
             return card
         return True
+
+    def __repr__(self):
+        return "%s's Hand" % (self.player.name)
 
 class FluxxDeck(Deck):
 

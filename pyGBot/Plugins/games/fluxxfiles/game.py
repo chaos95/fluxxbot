@@ -56,12 +56,13 @@ class Card(object):
         self.title = title
         # short_title must be unique!
         self.short_title = short_title
-        self._owner = None
+        self.owner = None
 
     def del_owner(self):
         if self.owner and self.owner.is_removable and self in self.owner.cards:
             print "Removing '%s' from %r" % (self, self.owner)
             self.owner.cards.remove(self)
+            print self.owner.cards
             if hasattr(self.owner, "short_title_map") and \
                     self.short_title in self.owner.short_title_map:
                 del self.owner.short_title_map[self.short_title]
@@ -80,8 +81,9 @@ class CardPile(object):
 
     is_removable = True
     
-    def __init__(self):
+    def __init__(self, name=""):
         self.cards = []
+        self.name = name
         self.short_title_map = {}
     
     def shuffle(self):
@@ -89,23 +91,25 @@ class CardPile(object):
 
     def receive(self, R):
         for card in R:
+            print card
             card.del_owner()
-            
-        L = []
-        for card in R:
-            ret = self.receive_card(card)
-            if ret is True:
-                self.cards.append(card)
-                self.short_title_map[card.short_title] = card
-                card.owner = self
-                L.append(card)
-            elif ret is not False:
-                self.cards.append(ret)
-                self.short_title_map[ret.short_title] = ret
-                ret.del_owner()
-                ret.owner = self
-                L.append(ret)
-        return L
+
+        if not isinstance(R, CardPile):
+            L = []
+            for card in R:
+                ret = self.receive_card(card)
+                if ret is True:
+                    self.cards.append(card)
+                    self.short_title_map[card.short_title] = card
+                    card.owner = self
+                    L.append(card)
+                elif ret is not False:
+                    self.cards.append(ret)
+                    self.short_title_map[ret.short_title] = ret
+                    ret.del_owner()
+                    ret.owner = self
+                    L.append(ret)
+            return L
 
     def receive_card(self, card):
         """
@@ -135,8 +139,11 @@ class CardPile(object):
         return card in self.cards or card in self.short_title_map
     
     def __iter__(self):
-        return iter(self.cards)
+        return iter(self.cards[:])
 
+    def __repr__(self):
+        return self.name or object.__repr__(self)
+    
     def __str__(self):
         return pretty_print_list(self.cards)
     

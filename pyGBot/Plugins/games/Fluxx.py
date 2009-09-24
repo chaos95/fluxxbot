@@ -379,7 +379,7 @@ class Fluxx(BasePlugin):
         if len(command) > 0 and command[0] == "!":
             command = command[1:]
         command = command.strip()
-        if command in command_aliases:
+        if command in command_alias(es:
             command = command_aliases[command]
         if command not in helpText:
             command = 'commands'
