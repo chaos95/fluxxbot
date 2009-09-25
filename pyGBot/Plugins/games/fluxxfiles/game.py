@@ -181,3 +181,6 @@ class Player(object):
         if self._hand is not None:
             return getattr(self._hand, i)
         return None
+
+    def __str__(self):
+        return self.name
