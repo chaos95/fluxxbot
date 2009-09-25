@@ -460,7 +460,7 @@ class Fluxx(BasePlugin):
 
     @_invalidCommandPrefix(noPrivate=True)
     def status(self, msg_channel, user, params):
-        if hasattr(self, "game", None) is None:
+        if getattr(self, "game", None) is None:
             self.privout(msg_channel, "No game is in progress.")
         elif self.game.started:
             self.privout(msg_channel, "A game is in progress.")
