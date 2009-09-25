@@ -50,8 +50,7 @@ class FluxxIRCUser(FluxxPlayer):
         self.game = plugin.game
     
     def win(self):
-        log.logger.info("%s won Fluxx game %d" % (self.game, self.channel))
-        self.plugin.pubout("%s won the game!" % self.name)
+        self.plugin.pubout("%s won the game!" % (self.name,))
         self.plugin.end()
         self.game = None
     
@@ -259,7 +258,7 @@ class Fluxx(BasePlugin):
         self.game = None
         self.users = {}
         self.user_handlers = {}
-        self.pubout("The game has ended")
+        self.pubout("The game has ended.")
     
     def check_callback(self, channel, user, message, check=False):
         user = user.lower()
@@ -746,7 +745,7 @@ command_aliases = {
     'j':        'join',
     '?':        'help',
     'u':        'status',
-    'stats':    'stats',
+    'stats':    'status',
     'q':        'quit',
     'find':     'search',
 }
