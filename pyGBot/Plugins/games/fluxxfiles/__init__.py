@@ -13,6 +13,7 @@ class FluxxGame(object):
     def __init__(self):
         self.started = False
         self.finished = False
+        self.debug = False
         self.deck = FluxxDeck()
         self.rule_pile = RulePile(self)
         self.draw_discard = DrawDiscard(self)

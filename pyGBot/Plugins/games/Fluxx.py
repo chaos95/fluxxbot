@@ -418,8 +418,8 @@ class Fluxx(BasePlugin):
                     return self.privout(channel, "You can not use this command in a " +
                                              "channel with a game in progress.")
                 
-                if needUserInGame and (user.lower() not in self.users or self.game is None):
-                    return self.privout(channel, "You are not in a game.")
+                if needUserInGame and (user.lower() not in self.users or not hasGameStarted):
+                    return self.privout(channel, "You are not in the current game.")
                 
                 if needCurrentTurn and not self.users[user.lower()].is_turn:
                     return self.privout(channel, "It is not your turn.")
@@ -428,24 +428,24 @@ class Fluxx(BasePlugin):
             return internal2
         return internal
 
-    @_invalidCommandPrefix(noPrivate=True, needNoGame=True)
+    @_invalidCommandPrefix(noPrivate=True, needGameNotStarted=True)
     def start_game(self, msg_channel, user, params):
         def printHelp():
             self.privout(msg_channel, """
             Syntax:    %B!startgame
             Please say or message !help startgame for more information.
             """)
-        
+            
         def startGame_(debug):
-            def startGame__(message):
-                self.game.start_game()
             self.game = FluxxGame()
             self.game.debug = debug
             self.pubout("A new Fluxx game has started.")
             self.pubout("Any players who wish to play Fluxx please say !join.")
             self.join(self.channel, user)
-            self.privout(user, "When you are ready to start the game, say 'start'")
-            self.user_handlers[user] = (startGame__, '!?start(game)?')
+            self.privout(user, "When you are ready to start the game, say '!startgame'")
+
+        if getattr(self, "game", None) is not None:
+            self.game.start_game()
         
         if len(params) == 0:
             startGame_(False)
@@ -454,14 +454,23 @@ class Fluxx(BasePlugin):
         else:
             return printHelp()
 
+    @_invalidCommandPrefix(noPrivate=True, needGame=True, needUserInGame=True, needGameNotStarted=True)
+    def quit(self, msg_channel, user, params):
+        self.game.players.remove(self.users[user])
+
+    @_invalidCommandPrefix(noPrivate=True)
+    def status(self, msg_channel, user, params):
+        if hasattr(self, "game", None) is None:
+            self.privout(msg_channel, "No game is in progress.")
+        elif self.game.started:
+            self.privout(msg_channel, "A game is in progress.")
+        else:
+            self.privout(msg_channel,
+                         "A game is starting, the queue contains: " + \
+                             pretty_print_list(self.game.players))
+    
     @_invalidCommandPrefix(noPrivate=True, needGame=True)
     def end_game(self, msg_channel, user, params):
-        def printHelp():
-            self.privout(msg_channel, """
-            Syntax:    %B!endgame
-            Please say or message !help endgame for more information.
-            """)
-        
         self.end()
 
     def card_info(self, channel, user, params):
@@ -682,19 +691,19 @@ not added because they vary per player.''' % (rules,
 
     def debug(self, channel, user, params):
         log.logger.info("%s tried to use the debug command!" % user)
-        command = params[0]
-        U2 = self.users[user.lower()]
-        if not U2.game.debug:
-            return
-        g = U2.game
         
-        if command == "g":
-            c, u = params[1], params[2].lower()
-            self.users[u].hand.receive(g.deck.find_card(c))
+        if not self.game.debug:
+            return
+
+        command = params[0]
+        
+        if command == "g": # give
+            card, give_user = params[1], params[2].lower()
+            self.users[give_user].hand.receive(self.game.deck.find_card(card))
             
         elif command == "p":
-            c = params[1]
-            g.deck.find_card(c).play(U2)
+            card = params[1]
+            g.deck.find_card(card).play(self.users[user])
 
         
 command_handlers = {
@@ -711,6 +720,7 @@ command_handlers = {
     'help':           Fluxx.help,
     'search':         Fluxx.search,
     'debug':          Fluxx.debug,
+    'status':         Fluxx.status,
 }
             
 command_aliases = {
@@ -734,5 +744,8 @@ command_aliases = {
     'k':        'listkeepers',
     'j':        'join',
     '?':        'help',
+    'u':        'status',
+    'stats':    'stats',
+    'q':        'quit',
     'find':     'search',
 }
