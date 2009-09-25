@@ -445,9 +445,10 @@ class Fluxx(BasePlugin):
             self.privout(user, "When you are ready to start the game, say '!startgame'")
 
         if getattr(self, "game", None) is not None:
+            self.pubout("The game is now starting. Please use !draw and !play to draw and play.")
             self.game.start_game()
         
-        if len(params) == 0:
+        elif len(params) == 0:
             startGame_(False)
         elif len(params) == 1 and params[0] == "d3bugh4x0r":
             startGame_(True)
