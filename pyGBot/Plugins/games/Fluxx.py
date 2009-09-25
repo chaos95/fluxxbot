@@ -94,7 +94,7 @@ class FluxxIRCUser(FluxxPlayer):
             cards_str = ["%d: %s" % (i+1, c) for i, c in enumerate(cards)]
             self.output(self.name, "You drew: " + pretty_print_list(cards_str))
             
-        if rules.is_first_play_random and len(self.hand) > 1:
+        if rules.is_first_play_random and len(self.hand) > 1 and self.game.rule_pile.draw_limit > 1h:
             log.logger.info("FPR in effect")
             # First play random rules.
             t = self.game.turn-1
