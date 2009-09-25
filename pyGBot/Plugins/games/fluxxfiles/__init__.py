@@ -359,11 +359,11 @@ class RulePile(CardPile):
 
     @property
     def hand_limit(self):
-        return max(card.hand_limit for card in self.cards)
+        return max(card.hand_limit for card in self.cards) + self.inflation_amount
     
     @property
     def keeper_limit(self):
-        return max(card.keeper_limit for card in self.cards)
+        return max(card.keeper_limit for card in self.cards) + self.inflation_amount
 
     @property
     def turn_order(self):
