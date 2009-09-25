@@ -382,6 +382,8 @@ class FluxxHand(CardPile):
         if card.type == "Creeper":
             self.player.output("You got a Creeper! You got %s" % card)
             self.player.output("Redrawing another card for you.")
+            self.player.plugin.pubout("%s got the Creeper %s while drawing!"\
+                                          % (self.player.name, card))
             self.player.keepers.receive(card)
             self.player.draw_amount += 1
             card = self.game.draw_cards(1)[0]
