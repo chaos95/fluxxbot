@@ -1,4 +1,4 @@
-g
+
 from pyGBot.Plugins.games.fluxxfiles.goals import *
 from pyGBot.Plugins.games.fluxxfiles.rules import *
 from pyGBot.Plugins.games.fluxxfiles.keepers import *
