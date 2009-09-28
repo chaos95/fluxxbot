@@ -13,7 +13,7 @@ def pretty_print_list(L, use_both=False):
     return "%sand %s" % ((('%s, ' * (len(L)-1)) % tuple(L[:-1])), L[-1])
 
 def pp_index(L, start=1, use_both=False):
-    return pretty_print_list(["%d: %s" % (i, v) for i, v in zip(count(start), L), use_both])
+    return pretty_print_list(["%d: %s" % (i, v) for i, v in zip(count(start), L)], use_both)
 
 def plural(L):
     return "" if len(L) == 1 else "s"
