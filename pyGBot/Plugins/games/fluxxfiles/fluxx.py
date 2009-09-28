@@ -1,12 +1,12 @@
 
 from pyGBot.Plugins.games.fluxxfiles.game import Card, CardPile, Player, pretty_print_list
-from pyGBot.Plugins.games.fluxxfiles.deck import FluxxDeck
 
 class FluxxGame(object):
 
     is_removable = False
     
     def __init__(self):
+        from pyGBot.Plugins.games.fluxxfiles.deck import FluxxDeck
         self.started = False
         self.finished = False
         self.debug = False
