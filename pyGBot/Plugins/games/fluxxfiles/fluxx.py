@@ -1,5 +1,6 @@
 
 from pyGBot.Plugins.games.fluxxfiles.game import Card, CardPile, Player, pretty_print_list
+from pyGBot.Plugins.games.fluxxfiles.deck import FluxxDeck
 
 class FluxxGame(object):
 
