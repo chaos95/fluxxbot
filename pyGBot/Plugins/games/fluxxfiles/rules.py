@@ -1,6 +1,7 @@
-from fluxx import FluxxCard
-from goals import GoalCard
-from game import pretty_print_list
+
+from pyGBot.Plugins.games.fluxxfiles.fluxx import FluxxCard
+from pyGBot.Plugins.games.fluxxfiles.goals import GoalCard
+from pyGBot.Plugins.games.fluxxfiles.game import pretty_print_list
 
 class RuleCard(FluxxCard):
     information = """

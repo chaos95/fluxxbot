@@ -21,7 +21,9 @@ import re
 from pyGBot import log
 from pyGBot.BasePlugin import BasePlugin
 
-from pyGBot.Plugins.games.fluxxfiles import FluxxPlayer, FluxxGame, FluxxDeck, pretty_print_list
+from pyGBot.Plugins.games.fluxxfiles.fluxx import FluxxPlayer, FluxxGame
+from pyGBot.Plugins.games.fluxxfiles.game import pretty_print_list, pp_index
+from pyGBot.Plugins.games.fluxxfiles.deck import FluxxDeck
 
 # IRC formatting
 BOLD      ='\x02' # Bold
@@ -36,8 +38,7 @@ YES_NO_RESPONSE = '(yes|true|no|false|0|1)'
 class FluxxIRCGame(FluxxGame):
     def post_deal_hook(self):
         for p in self.players:
-            p.output("You got: %s" % pretty_print_list(["%d: %s" % (i+1, c) \
-                                                       for i, c in enumerate(p.hand)]))
+            p.output("You got: %s" % pp_index(p.hand))
 
 class FluxxIRCUser(FluxxPlayer):
 
@@ -73,14 +74,13 @@ class FluxxIRCUser(FluxxPlayer):
 
         def ask():
             player.request_input("Choose a number from 1 to %d" % len(self.hand), 
-                                 (callback, '|'.join([str(n+1) for n in range(len(self.hand))])))
+                                 (callback, '|'.join(str(n+1) for n in xrange(len(self.hand)))))
     
         log.logger.info("Starting %s's turn" % self.name)
         self.output("It is now your turn.")
         self.plugin.pubout("It is now %s's turn." % self.name)
-
-        hand_str = ["%d: %s" % (i+1, c) for i, c in enumerate(self.hand)]
-        hand_str = pretty_print_list(hand_str)
+        
+        hand_str = pp_index(self.hand)
         if hand_str == "":
             hand_str = " no cards."
         else:
@@ -90,10 +90,9 @@ class FluxxIRCUser(FluxxPlayer):
         rules = self.game.rule_pile
         if rules.no_hand_bonus(self) > 0:
             cards = self.draw(rules.no_hand_bonus(self))
-            cards_str = ["%d: %s" % (i+1, c) for i, c in enumerate(cards)]
-            self.output(self.name, "You drew: " + pretty_print_list(cards_str))
+            self.output(self.name, "You drew: " + pp_index(cards))
             
-        if rules.is_first_play_random and len(self.hand) > 1 and self.game.rule_pile.draw_limit > 1:
+        if rules.is_first_play_random and len(self.hand) > 1 and self.game.rule_pile.draw_amount > 1:
             log.logger.info("FPR in effect")
             # First play random rules.
             t = self.game.turn-1
@@ -102,11 +101,11 @@ class FluxxIRCUser(FluxxPlayer):
             else:
                 player = self.game.players[t]
             self.plugin.pubout(("%s must choose the first card from " +
-                                 "%s's hand") % (player.name, self.name))
+                                 "%s's hand.") % (player.name, self.name))
             self.halt_game = "First Play Random"
             ask()
             
-        d, p = rules.draw_amount, rules.play_amount
+        d, p = self.can_draw_amount, self.can_play_amount
         self.draw_amount = self.play_amount = 0
         self.output("You can draw %d card%s, and play %s card%s." % \
                             (d, "" if d == 1 else "s", "all" if p == 0 else p, \
@@ -436,7 +435,7 @@ class Fluxx(BasePlugin):
             """)
             
         def startGame_(debug):
-            self.game = FluxxGame()
+            self.game = FluxxIRCGame()
             self.game.debug = debug
             self.pubout("A new Fluxx game has started.")
             self.pubout("Any players who wish to play Fluxx please say !join.")
@@ -529,8 +528,7 @@ class Fluxx(BasePlugin):
             handlen = len(player.hand)
             cards = player.draw(0)
             player.draw_amount += len(cards)
-            cards_str = ["%d: %s" % (i+handlen+1, c) for i, c in enumerate(cards)]
-            player.output("You auto-drew: " + pretty_print_list(cards_str))
+            player.output("You auto-drew: " + pp_index(cards, handlen))
         # Check for winnage.
         if player.game.current_goal is not None:
             player.game.current_goal.check_for_win(player.game)
@@ -565,7 +563,6 @@ class Fluxx(BasePlugin):
         player.draw_amount += len(cards)
         # Make sure to reply to user
         # Don't show the cards in public!
-        cards_str = ["%d: %s" % (i+handlen+1, c) for i, c in enumerate(cards)]
         self.privout(user, "You drew: " + pretty_print_list(cards_str))
         if player.draws_left > 0:
             self.privout(user, "You can draw %d more card%s." % \
@@ -648,7 +645,7 @@ class Fluxx(BasePlugin):
 The rules are: %s
 Draw %d, Play %s, %sHand Limit%s, %sKeeper Limit%s. Bonuses are \
 not added because they vary per player.''' % (rules,
-                                              rules.draw_amount, rules.play_amount,
+                                              rules.draw_amount(None), rules.play_amount(None),
                                               "No " if hl == -1 else "",
                                               "" if hl == -1 else " %d" % hl,
                                               "No " if kl == -1 else "",

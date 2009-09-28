@@ -1,18 +1,22 @@
 
 import random
+from itertools import count
 
-def pretty_print_list(list, use_both=False):
-    list = [t for t in list if t is not None]
-    if len(list) == 0:
+def pretty_print_list(L, use_both=False):
+    L = [t for t in L if t is not None]
+    if len(L) == 0:
         return ""
-    elif len(list) == 1 and list[0] is not None:
-        return str(list[0])
-    elif use_both and len(list) == 2:
-        return "both %s and %s" % tuple(list)
-    return "%sand %s" % ((('%s, ' * (len(list)-1)) % tuple(list[:-1])), list[-1])
+    elif len(L) == 1 and L[0] is not None:
+        return str(L[0])
+    elif use_both and len(L) == 2:
+        return "both %s and %s" % tuple(L)
+    return "%sand %s" % ((('%s, ' * (len(L)-1)) % tuple(L[:-1])), L[-1])
 
-def plural(list):
-    return "" if len(list) == 1 else "s"
+def pp_index(L, start=1, use_both=False):
+    return pretty_print_list(["%d: %s" % (i, v) for i, v in zip(count(start), L), use_both])
+
+def plural(L):
+    return "" if len(L) == 1 else "s"
 
 class Deck(object):
 

@@ -1,5 +1,6 @@
-from fluxx import FluxxCard
-from game import pretty_print_list
+
+from pyGBot.Plugins.games.fluxxfiles.fluxx import FluxxCard
+from pyGBot.Plugins.games.fluxxfiles.game import pretty_print_list
 
 class KeeperCard(FluxxCard):
     information = """
@@ -9,6 +10,7 @@ in front of you.
     type = "Keeper"
     in_play = False
     is_creeper = False
+    
     def __init__(self, title, short_title=""):
         if short_title == "":
             if " " in title:

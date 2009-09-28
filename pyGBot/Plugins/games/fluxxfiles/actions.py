@@ -1,5 +1,6 @@
-from fluxx import FluxxCard
-from game import pretty_print_list, plural
+
+from pyGBot.Plugins.games.fluxxfiles.fluxx import FluxxCard
+from pyGBot.Plugins.games.fluxxfiles.game import pretty_print_list, plural, pp_index
 from random import choice
 
 
@@ -50,29 +51,30 @@ Select one of the New Rule cards in play and place it in the discard pile.
         else: self.ask()
 
     def ask(self):
-        rules_str = ["%d: %s" % (i+1, c) for i, c in enumerate(self.rules)]
-        self.player.request_input("Which rule do you want to trash? %s" % rules_str,
-                                  (self, rule_regex))
         
-    def __call__(self, message):
-        player = self.player
-        rule = message
-        if rule.isdigit():
-            rule = int(rule)
-            num_rules = len(self.rules)
-            if rule > num_rules:
-                self.player.output("There aren't that many rules in play!")
-                return self.ask()
-            rule_picked = self.rules[rule-1]
-        else:
-            rule_picked = player.game.find_card(rule)
-            if rule_picked not in self.rules:
-                player.output("You can't trash that rule.")
-                return self.ask()
-        player.plugin.pubout("%s trashed %s." % (player.name, rule_picked))
-        player.game.draw_discard.discard(rule_picked)
-        player.halt_game = None
-        return True
+        def callback(self, message):
+            player = self.player
+            rule = message
+            if rule.isdigit():
+                rule = int(rule)
+                num_rules = len(self.rules)
+                if rule > num_rules:
+                    self.player.output("There aren't that many rules in play!")
+                    return self.ask()
+                rule_picked = self.rules[rule-1]
+            else:
+                rule_picked = player.game.find_card(rule)
+                if rule_picked not in self.rules:
+                    player.output("You can't trash that rule.")
+                    return self.ask()
+            player.plugin.pubout("%s trashed %s." % (player.name, rule_picked))
+            player.game.draw_discard.discard(rule_picked)
+            player.halt_game = None
+            return True
+        
+        rules_str = pp_index(self.rules)
+        self.player.request_input("Which rule do you want to trash? %s" % rules_str,
+                                  (callback, rule_regex))
 
 class NoLimits(ActionCard):
     
@@ -103,10 +105,9 @@ Draw 3 extra cards!
         """)
 
     def do_action(self, player):
-        cards = player.draw(3 + player.game.rule_pile.inflation_amount, True)
         handlen = len(player.hand)
-        cards_str = ["%d: %s" % (i+handlen+1, c) for i, c in enumerate(cards)]
-        player.output("You drew: " + pretty_print_list(cards_str))
+        cards = player.draw(3 + player.game.rule_pile.inflation_amount, True)
+        player.output("You drew: " + pp_index(cards, handlen))
 
 class EverybodyGetsOne(ActionCard):
     
@@ -125,70 +126,117 @@ Draw enough cards to give 1 card each to each player, then do so.
         self.num_players = len(self.players)
         self.total_cards = self.draw_amount * self.num_players
         self.cards = player.game.draw_cards(self.total_cards)
-        self.cards_str = ["%d: %s" % (i+1, c) for i, c in enumerate(self.cards)]
         self.cards_given = dict((a.name.lower(),0) for a in self.players)
         self.players_dict = dict((a.name.lower(),a) for a in self.players)
         self.ask()
     
     def ask(self):
+        
+         def callback(self, message):
+            params = message.replace("give","") \
+                            .replace("to","") \
+                            .replace("!", "").split()
+            if len(params) != 2:
+                return self.player.output("Syntax:    %B[give] %Ucard%U [to] %Uplayer%U%B")
+            card_picked, receiver = params
+            rec_lower = receiver.lower()
+
+            # Check if the player exists.
+            if rec_lower not in self.players_dict:
+                self.player.output("There is no player with that name.")
+                return self.ask()
+
+            # Figure out what card to give
+            if card_picked.isdigit():
+                card_picked = int(card_picked)
+                handlen = len(self.cards)
+                if card_picked > handlen:
+                    self.player.output("You only have %d card%s to give." % \
+                                  (handlen, plural(self.cards)))
+                    return self.ask()
+                card_picked = self.cards[card_picked-1]
+            else:
+                card_picked = self.player.game.find_card(card_picked.upper())
+                if card_picked not in self.cards:
+                    self.player.output("You didn't draw that card!")
+                    return self.ask()
+            # Check if you've already given that person enough cards
+            if self.cards_given[rec_lower] == self.draw_amount:
+                self.player.output("You already gave them %d cards." % self.draw_amount)
+                return self.ask()
+            # Send the card and delete from set that you drew
+            hand = self.players_dict[rec_lower].hand
+            hand.receive(card_picked)
+            self.cards_given[rec_lower] += 1
+            self.cards.remove(card_picked)
+
+            # Notify player
+            if receiver != self.player.name:
+                self.players_dict[rec_lower].output("%s gave you %d: %s." \
+                                  % (self.player.name, len(hand), card_picked))
+                self.player.output("You gave %s to %s." % (card_picked, receiver))
+            else:
+                self.player.output("You gave yourself %d: %s." % (len(hand), card_picked))
+            # Check if you're done yet
+            if sum(self.cards_given.values()) == self.total_cards:
+                self.player.halt_game = None
+                return True
+            return self.ask()
+
+         
         self.player.halt_game = self.title
-        cards_str = ["%d: %s" % (i+1, c) for i, c in enumerate(self.cards)]
         self.player.request_input("Choose which cards to give to who: %s" % \
-                                  pretty_print_list(cards_str), (self, EverybodyGetsOne.regex))
-        
-    def __call__(self, message):
-        params = message.replace("give","") \
-                        .replace("to","") \
-                        .replace("!", "").split()
-        if len(params) != 2:
-            return self.player.output("Syntax:    %B[give] %Ucard%U [to] %Uplayer%U%B")
-        card_picked, receiver = params
-        rec_lower = receiver.lower()
-        
-        # Check if the player exists.
-        if rec_lower not in self.players_dict:
-            self.player.output("There is no player with that name.")
-            return self.ask()
-        
-        # Figure out what card to give
-        if card_picked.isdigit():
-            card_picked = int(card_picked)
-            handlen = len(self.cards)
-            if card_picked > handlen:
-                self.player.output("You only have %d card%s to give." % \
-                              (handlen, plural(self.cards)))
-                return self.ask()
-            card_picked = self.cards[card_picked-1]
-        else:
-            card_picked = self.player.game.find_card(card_picked.upper())
-            if card_picked not in self.cards:
-                self.player.output("You didn't draw that card!")
-                return self.ask()
-        # Check if you've already given that person enough cards
-        if self.cards_given[rec_lower] == self.draw_amount:
-            self.player.output("You already gave them %d cards." % self.draw_amount)
-            return self.ask()
-        # Send the card and delete from set that you drew
-        hand = self.players_dict[rec_lower].hand
-        hand.receive(card_picked)
-        self.cards_given[rec_lower] += 1
-        self.cards.remove(card_picked)
-        
-        # Notify player
-        if receiver != self.player.name:
-            self.players_dict[rec_lower].output("%s gave you %d: %s." \
-                              % (self.player.name, len(hand), card_picked))
-            self.player.output("You gave %s to %s." % (card_picked, receiver))
-        else:
-            self.player.output("You gave yourself %d: %s." % (len(hand), card_picked))
-        # Check if you're done yet
-        if sum(self.cards_given.values()) == self.total_cards:
-            self.player.halt_game = None
-            return True
-        return self.ask()
+                                  pp_index(self.cards), (callback, self.regex))
 
 keeper_regex = "\d+|[kc]_[a-z]+"
 
+class TrashOrStealSomething(ActionCard):
+
+    def do_action(self, player):
+        self.player = player
+        self.players = player.game.players
+        self.keeper_list = []
+        # For the chosen player
+        self.ask()
+
+    def ask(self):
+
+        def callback(keeper):
+            player, players, keeper_list = self.player, self.players, self.keeper_list
+            if keeper.isdigit():
+                keeper = int(keeper)
+                num_keepers = len(keeper_list)
+                if keeper > num_keepers:
+                    player.output("There aren't that many keepers on the table!")
+                    return self.ask()
+                keeper_picked = self.keeper_list[keeper-1]
+            else:
+                keeper_picked = player.game.deck.find_card(keeper.upper())
+                if keeper_picked not in self.keeper_list:
+                    player.output("You can't %s that keeper." % (self.word))
+                    return self.ask()
+            player_name = keeper_picked.owner.player.name
+            if player_name != player.name:
+                player.plugin.pubout("%s %s %s's %s." % \
+                                           (player.name, self.word_past, player_name, keeper_picked))
+            else:
+                player.plugin.pubout("%s %s their %s." % \
+                                           (player.name, self.word_past, keeper_picked))
+            self.do(keeper_picked)
+            player.halt_game = None
+            return True
+
+        
+        player, players, keeper_list = self.player, self.players, self.keeper_list
+        player.halt_game = self.title
+        s = ["Which keeper or creeper do you want to %s?" % self.word]
+        for p in players:
+            keepers = p.keepers
+            if len(keepers) == 0: continue
+            s.append(pp_index(keepers, len(self.keeper_list)+1))
+        player.request_input('\n'.join(s)
+                             (callback, keeper_regex))
+    
 class TrashSomething(ActionCard):
 
     def __init__(self):
@@ -199,57 +247,12 @@ any player and put it on the discard pile.
 If no one has any Keepers or Creepers, nothing happens when
 you play this card.
         """)
-        self.player_keepers = None
-        self.player_name = None
+        self.word = "trash"
+        self.word_past = "trashed"
 
-    def do_action(self, player):
-        self.player = player
-        self.players = player.game.players
-        self.keeper_list = []
-        # For the chosen player
-    
-    def __call__(self, keeper):
-        player, players, keeper_list = self.player, self.players, self.keeper_list
-        if keeper.isdigit():
-            keeper = int(keeper)
-            num_keepers = len(keeper_list)
-            if keeper > num_keepers:
-                player.output("There aren't that many keepers on the table!")
-                return self.ask()
-            keeper_picked = self.keeper_list[keeper-1]
-        else:
-            keeper_picked = player.game.deck.find_card(keeper.upper())
-            if keeper_picked not in self.keeper_list:
-                player.output("You can't trash that keeper.")
-                return self.ask()
-        player_name = keeper_picked.owner.player.name
-        if player_name != player.name:
-            player.plugin.pubout("%s trashed %s's %s." % \
-                                       (player.name, player_name, keeper_picked))
-        else:
-            player.plugin.pubout("%s trashed their %s." % \
-                                       (player.name, keeper_picked))
-        player.game.draw_discard.discard(keeper_picked)
-        player.halt_game = None
-        return True
-
-    def ask(self):
-        player, players, keeper_list = self.player, self.players, self.keeper_list
-        player.halt_game = self.title
-        keeper_no = 1
-        s = ""
-        for p in players:
-            keepers = p.keepers
-            if len(keepers) == 0: continue
-            s += "\n%s: " % p.name
-            keeper_str = []
-            for k in keepers:
-                keeper_str.append("%d: %s" % (keeper_no, k))
-                keeper_no += 1
-                self.keeper_list.append(k)
-            s += pretty_print_list(keeper_str)
-        player.request_input("Which keeper or creeper do you want to trash? %s" % s,
-                             (self, keeper_regex))
+    def do(self, keeper_picked):
+        self.player.game.discard(keeper_picked)
+        
 
 class StealSomething(ActionCard):
 
@@ -258,59 +261,11 @@ class StealSomething(ActionCard):
 Take your choice of any Keeper or Creeper from in front of
 another player, and put it in front of you.
         """)
-        self.keeper_list = []
-        self.players = None
-        self.player = None
+        self.word = "steal"
+        self.word_past = "stole"
 
-    def do_action(self, player):
-        self.player = player
-        self.players = player.game.players
-        # For the chosen player
-        self.ask()
-    
-    def __call__(self, keeper):
-        player, players, keeper_list = self.player, self.players, self.keeper_list
-        if keeper.isdigit():
-            keeper = int(keeper)
-            num_keepers = len(keeper_list)
-            if keeper > num_keepers:
-                player.output("There aren't that many keepers on the table!")
-                return self.ask()
-            keeper_picked = keeper_list[keeper-1]
-        else:
-            keeper_picked = player.game.deck.find_card(keeper.upper())
-            if keeper_picked not in self.keeper_list:
-                player.output("You can't steal that keeper.")
-                return self.ask()
-        player_name = keeper_picked.owner.player.name
-        if player_name != player.name:
-            player.plugin.pubout("%s stole %s's %s." % \
-                                       (player.name, player_name, keeper_picked))
-        else:
-            player.output("You can't steal that keeper.")
-            return self.ask()
-        player.keepers.receive(keeper_picked)
-        player.halt_game = None
-        return True
-
-    def ask(self):
-        player, players, keeper_list = self.player, self.players, self.keeper_list
-        player.halt_game = self.title
-        keeper_no = 1
-        s = ""
-        for p in players:
-            if p == player: continue
-            keepers = p.keepers
-            s += "\n%s: " % p.name
-            keeper_str = []
-            if len(keepers) == 0: continue
-            for k in keepers:
-                keeper_str.append("%d: %s" % (keeper_no, k))
-                keeper_no += 1
-                self.keeper_list.append(k)
-            s += pretty_print_list(keeper_str)
-        player.request_input("Which keeper or creeper do you want to steal? %s" % s,
-                             (self, keeper_regex))
+    def do(self, keeper_picked):
+        self.player.keepers.receive(keeper_picked)
 
 class EmptyTrash(ActionCard):
     
@@ -337,38 +292,39 @@ Take a card at random from another player's hand, and play it.
         self.players = [p for p in player.game.players if p != player]
         self.players_dict = dict((a.name.lower(),a) for a in self.players)
         player.halt_game = self.title
-        if len(self.players) == 1: self("1") # Just use that player
-        else: self.ask()
-    
-    def __call__(self, player_picked):
-        player, players, players_dict = self.player, self.players, self.players_dict
-        if player_picked.isdigit():
-            player_picked = int(player_picked)
-            num_players = len(players)
-            if player_picked > num_players:
-                player.output("There aren't that many players!")
-                return self.ask()
-            player_picked = players[player_picked-1]
-        else:
-            if player_picked.lower() not in players_dict:
-                player.output("They're not playing.")
-                return self.ask()
-            player_picked = players_dict[player_picked.lower()]
-        card_picked = choice(player_picked.hand)
-        player_name = player_picked.name
-        player.plugin.pubout("%s used %s's %s." % \
-                                 (player.name, player_name, card_picked))
-        player.hand.receive(card_picked) # So the card belongs to the player now.
-        card_picked.play(player)
-        player.halt_game = None
-        return True
+        self.ask()
     
     def ask(self):
-        player, players, players_dict = self.player, self.players, self.players_dict
-        regex = "\d|" + "|".join(p.name for p in players)
-        players_str = ["%d: %s" % (i+1, c.name) for i, c in enumerate(players)]
-        player.request_input("Whose player's card do you want to play? %s" % \
-                             pretty_print_list(players_str), (self, regex))
+        
+        def callback(self, player_picked):
+            player, players, players_dict = self.player, self.players, self.players_dict
+            if player_picked.isdigit():
+                player_picked = int(player_picked)
+                num_players = len(players)
+                if player_picked > num_players:
+                    player.output("There aren't that many players!")
+                    return self.ask()
+                player_picked = players[player_picked-1]
+            else:
+                if player_picked.lower() not in players_dict:
+                    player.output("They're not playing.")
+                    return self.ask()
+                player_picked = players_dict[player_picked.lower()]
+            card_picked = choice(player_picked.hand)
+            player_name = player_picked.name
+            player.plugin.pubout("%s used %s's %s." % \
+                                     (player.name, player_name, card_picked))
+            player.hand.receive(card_picked) # So the card belongs to the player now.
+            card_picked.play(player)
+            player.halt_game = None
+            return True
+
+        if len(self.players) == 1: callback("1")
+        else:
+            player, players, players_dict = self.player, self.players, self.players_dict
+            regex = "\d|" + "|".join(p.name for p in players)
+            player.request_input("Whose player's card do you want to play? %s" % \
+                                     pp_index(players), (callback, regex))
 
 class DiscardDraw(ActionCard):
     
@@ -384,9 +340,7 @@ Do not count this card when determining how many replacement cards to draw.
         cards_in_hand = len(hand)
         player.game.draw_discard.discard(hand)
         cards = player.draw(cards_in_hand, True)
-        handlen = len(player.hand)
-        cards_str = ["%d: %s" % (i+handlen+1, c) for i, c in enumerate(cards)]
-        player.output("You drew: " + pretty_print_list(cards_str))
+        player.output("You drew: " + pp_index(cards))
 
 card_regex="\d|[kcgar]_[a-z0-9]+"
 
@@ -398,42 +352,44 @@ class DrawXUseY(ActionCard):
     def do_action(self, player):
         self.player = player
         player.halt_game = self.title
-        draw_amount = (self.draw_total + player.game.rule_pile.inflation_amount)
+        self.draw_amount = (self.draw_total + player.game.rule_pile.inflation_amount)
         self.cards = player.game.draw_cards(draw_amount)
-        self.ask()
-
-    def __call__(self, card):
-        player = self.player
-        if card.isdigit():
-            card = int(card)
-            num_cards = len(self.cards)
-            if card == 0:
-                player.output("You silly!")
-                return self.ask()
-            if card > num_cards:
-                player.output("You didn't get that many cards!")
-                return self.ask()
-            card_picked = self.cards[card-1]
-        else:
-            card_picked = player.game.find_card(card.upper())
-            if card_picked not in self.cards:
-                player.output("You can't play that card.")
-                return self.ask()
-        player.hand.receive(card_picked)
-        card_picked.play(player)
-        self.cards.remove(card_picked)
-        
-        if len(self.cards) == self.draw_total - self.play_total:
-            player.game.draw_discard.discard(self.cards)
-            player.halt_game = None
-            return True
         self.ask()
         
     def ask(self):
+        
+        def callback(self, card):
+            player = self.player
+            if card.isdigit():
+                card = int(card)
+                num_cards = len(self.cards)
+                if card == 0:
+                    player.output("You silly!")
+                    return self.ask()
+                if card > num_cards:
+                    player.output("You didn't get that many cards!")
+                    return self.ask()
+                card_picked = self.cards[card-1]
+            else:
+                card_picked = player.game.find_card(card.upper())
+                if card_picked not in self.cards:
+                    player.output("You can't play that card.")
+                    return self.ask()
+            player.hand.receive(card_picked)
+            card_picked.play(player)
+            self.cards.remove(card_picked)
+
+            if len(self.cards) == self.draw_total - self.play_total:
+                player.game.draw_discard.discard(self.cards)
+                player.halt_game = None
+                return True
+            self.ask()
+
+        
         player = self.player
-        cards_str = ["%d: %s" % (i+1, c) for i, c in enumerate(self.cards)]
-        player.request_input("What do you want to play? %s" % \
-                      pretty_print_list(cards_str), (self, card_regex))
+        player.request_input("What do you want to play? " + \
+                                 pp_index(cards, len(self.player.hand)), \
+                                 (callback, card_regex))
 
 class DrawTwoUseThem(DrawXUseY):
 
