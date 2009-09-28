@@ -182,10 +182,10 @@ Draw enough cards to give 1 card each to each player, then do so.
                 self.player.halt_game = None
                 return True
             return self.ask()
-    
-        self.player.halt_game = self.title
-        self.player.request_input("Choose which cards to give to who: %s" % \
-                                  pp_index(self.cards), (callback, self.regex))
+         
+         self.player.halt_game = self.title
+         self.player.request_input("Choose which cards to give to who: %s" % \
+                                       pp_index(self.cards), (callback, self.regex))
 
 keeper_regex = "\d+|[kc]_[a-z]+"
 
