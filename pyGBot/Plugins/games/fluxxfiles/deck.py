@@ -4,6 +4,8 @@ from pyGBot.Plugins.games.fluxxfiles.rules import *
 from pyGBot.Plugins.games.fluxxfiles.keepers import *
 from pyGBot.Plugins.games.fluxxfiles.actions import *
 
+from pyGBot.Plugins.games.fluxxfiles.game import Deck
+
 class FluxxDeck(Deck):
 
     def __init__(self):
